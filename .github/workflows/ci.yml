@@ -15,6 +15,25 @@ jobs:
     name: Test  
     runs-on: ubuntu-latest
 
+    # https://docs.github.com/en/actions/tutorials/use-containerized-services/create-postgresql-service-containers
+    # Service containers to run with `container-job`
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        # Provide the password for postgres
+        env:
+          POSTGRES_USER: root 
+          POSTGRES_PASSWORD: Lc@200409200034 
+          POSTGRES_DB: simple_bank 
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     # 1. 使用最新的 v4 版本拉取你的代码
     - name: Check out code
@@ -26,6 +45,10 @@ jobs:
       with:
         go-version: '1.24.5' # 建议：打开你项目根目录的 go.mod 文件，把这里的 1.20 改成和你本地一致的版本
 
-    # 3. 采用视频教程里的指令运行测试
+    # 3. 执行数据库迁移
+    - name: Run migrations
+      run: make migrateup
+
+    # 4. 采用视频教程里的指令运行测试
     - name: Test
       run: make test
