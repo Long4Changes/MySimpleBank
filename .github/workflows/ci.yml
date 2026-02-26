@@ -27,6 +27,9 @@ jobs:
           POSTGRES_USER: root 
           POSTGRES_PASSWORD: Lc@200409200034 
           POSTGRES_DB: simple_bank 
+        # 端口映射
+        ports:
+          - 5432:5432
         # Set health checks to wait until postgres has started
         options: >-
           --health-cmd pg_isready
