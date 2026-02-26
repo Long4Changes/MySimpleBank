@@ -45,10 +45,17 @@ jobs:
       with:
         go-version: '1.24.5' # 建议：打开你项目根目录的 go.mod 文件，把这里的 1.20 改成和你本地一致的版本
 
-    # 3. 执行数据库迁移
+    # 3. 安装数据库迁移工具（golang-migrate）
+    - name: Install golang-migrate
+      # https://github.com/golang-migrate/migrate/releases
+      run: |
+        curl -L https://github.com/golang-migrate/migrate/releases/download/v4.19.1/migrate.linux-amd64.tar.gz | tar xvz
+        sudo mv migrate /usr/bin/migrate
+        which migrate
+    # 4. 执行数据库迁移
     - name: Run migrations
       run: make migrateup
 
-    # 4. 采用视频教程里的指令运行测试
+    # 5. 采用视频教程里的指令运行测试
     - name: Test
       run: make test
