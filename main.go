@@ -9,9 +9,9 @@ import (
 	"log"
 
 	_ "github.com/lib/pq"
-	"github.com/techschool/simplebank/api"
-	db "github.com/techschool/simplebank/db/sqlc"
-	"github.com/techschool/simplebank/db/util"
+	"github.com/Long4Changes/MySimpleBank/api"
+	db "github.com/Long4Changes/MySimpleBank/db/sqlc"
+	"github.com/Long4Changes/MySimpleBank/db/util"
 )
 
 // 有了 viper 这段配置的硬编码就不需要了

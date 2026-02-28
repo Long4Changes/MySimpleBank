@@ -2,17 +2,18 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
-	db "github.com/techschool/simplebank/db/sqlc"
+	db "github.com/Long4Changes/MySimpleBank/db/sqlc"
 )
 
 // Server serves HTTP requests for our banking service.
+// 引入 gomock 后 store 代表的不再是一个结构体类型，而是一个接口，所以不需要用指针了
 type Server struct {
-	store  *db.Store
+	store  db.Store
 	router *gin.Engine
 }
 
 // NewServer creates a new HTTP server and setup routing
-func NewServer(store *db.Store) *Server {
+func NewServer(store db.Store) *Server {
 	server := &Server{store: store}
 	router := gin.Default()
 

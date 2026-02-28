@@ -14,4 +14,7 @@ test:
 	go test -v -cover ./...
 server:
 	go run main.go
-.PHONY: postgres createdb dropdb migrateup migratedown sqlc test server
+mock:
+	mockgen -package mockdb -destination db/mock/store.go github.com/Long4Changes/MySimpleBank/db/sqlc Store 
+# 每次添加好一个指令都要加到下面去
+.PHONY: postgres createdb dropdb migrateup migratedown sqlc test server mock

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	_ "github.com/lib/pq"
-	"github.com/techschool/simplebank/db/util"
+	"github.com/Long4Changes/MySimpleBank/db/util"
 )
 
 // 有了 viper 下面这段硬编码就不需要了

@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	db "github.com/techschool/simplebank/db/sqlc"
+	db "github.com/Long4Changes/MySimpleBank/db/sqlc"
 )
 
 // 看到就复习一下
@@ -17,6 +17,10 @@ type createAccountRequest struct {
 	Currency string `json:"currency" binding:"required,oneof=USD EUR"`
 }
 
+// 从前端传过来的数据有三种形式
+// 1. JSON 数据
+// 2. Uri Parameters
+// 3. Query Parameters
 func (server *Server) createAccount(ctx *gin.Context) {
 	var req createAccountRequest
 	// 系统尝试把前端传过来的JSON数据，强行塞进你定义的 createAccountRequest结构体当中

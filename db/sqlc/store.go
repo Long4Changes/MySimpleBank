@@ -5,25 +5,32 @@ import (
 	"database/sql"
 	"fmt"
 )
+// gomock
+// Store 接口中有着 Querier.go 中的所有方法以及 TransferTx 方法
+type Store interface {
+	Querier
+	TransferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error)
+}
 
 // Store provides all funcitons to execute db queries and transactions
 // 定义了一个匿名字段 *Queries
 // 所以 Store 可以“继承可见” Queries 的方法
-type Store struct {
-	*Queries
+// 这里由于要引入 gomock 所以把 Store --> SQLStore
+type SQLStore struct {
 	db *sql.DB
+	*Queries
 }
 
 // NewStore creates a new Store
-func NewStore(db *sql.DB) *Store {
-	return &Store{
+func NewStore(db *sql.DB) Store {
+	return &SQLStore{
 		db:      db,
 		Queries: New(db),
 	}
 }
 
 // execTx executes a function within a database transaction, execTx starts with 'e' --> private function, cannot be called by external package
-func (store *Store) execTx(ctx context.Context, fn func(*Queries) error) error {
+func (store *SQLStore) execTx(ctx context.Context, fn func(*Queries) error) error {
 	tx, err := store.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -58,7 +65,7 @@ type TransferTxResult struct {
 
 // TransferTx performs a money transfer from one account to the other.
 // It creates a transfer record, add account entries, add update accounts' balance within a single database transaction.
-func (store *Store) TransferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error) {
+func (store *SQLStore) TransferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error) {
 	var result TransferTxResult
 
 	err := store.execTx(ctx, func(q *Queries) error {

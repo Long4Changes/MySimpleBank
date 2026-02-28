@@ -1,0 +1,185 @@
+package api
+
+import (
+	"bytes"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	mockdb "github.com/Long4Changes/MySimpleBank/db/mock"
+	db "github.com/Long4Changes/MySimpleBank/db/sqlc"
+	"github.com/Long4Changes/MySimpleBank/db/util"
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
+)
+
+func TestGetAccountAPI(t *testing.T) {
+	/*
+		// 以下只进行了 Happy Path 完美路径 的测试
+		account := randomAccount()
+
+		ctrl := gomock.NewController(t)
+
+		// Go 1.14 之后不再需要手动调用 ctrl.Finish()
+		// 现在把 t 传入 gomock.NewController() 的时候，会自动执行类似 t.Cleanup(ctrl.Finish) 的操作
+		// defer ctrl.Finish()
+
+		store := mockdb.NewMockStore(ctrl)
+		// build stubs
+		// 这里 Mock 的方法 GetAccount 的输入输出结构还是要保持和真正的一样，GetAccount(ctx context.Context, id int64) (Account, error)
+		store.EXPECT().
+			// 希望调用 GetAccount 时具有 任何 上下文和此特定账户的 ID 参数
+			// Eq stands for Equal
+			GetAccount(gomock.Any(), gomock.Eq(account.ID)).
+			Times(1).
+			Return(account, nil)
+
+		// start test server and send request
+		// 不启动真实的 Web 服务器，而是再内存里“假装”发起了一次 HTTP 请求
+		server := NewServer(store)
+		// 来自 Go 标准库 net/http/httptest，它实现了 http.ResponseWriter 接口
+		// 但它不会把数据写到网络网卡里，而是直接写进自己内部的恶一个内存缓冲区（Buffer）里
+		recorder := httptest.NewRecorder()
+
+		url := fmt.Sprintf("/accounts/%d", account.ID)
+		// 在内存捏造出一个 HTTP 请求对象，它不需要经过浏览器的封装和操作系统的网络层
+		request, err := http.NewRequest(http.MethodGet, url, nil)
+		require.NoError(t, err)
+
+		// Gin 的核心引擎 Engine 实现了标准库的 http.Handler 接口
+		// 它必须包含一个叫 ServeHTTP 的方法
+		// 当真实服务器运行时，是Go 底层的网络模块在收到 TCP 报文后，去调用这个 ServeHTTP
+		// 但在测试里，我们人为地、直接地调用了这个方法
+		// 调用 ServerHTTP 后，就会去运行 account.go
+		server.router.ServeHTTP(recorder, request)
+		// check response
+		// recorder.Code 存储 response status code 响应状态吗
+		// recorder.Body 存储 response body 响应正文
+		require.Equal(t, http.StatusOK, recorder.Code)
+		requireBodyMatchAccount(t, recorder.Body, account)
+	*/
+
+	account := randomAccount()
+
+	testCases := []struct {
+		name          string
+		accountID     int64
+		buildStubs    func(store *mockdb.MockStore)
+		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name:      "OK",
+			accountID: account.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetAccount(gomock.Any(), gomock.Eq(account.ID)).
+					Times(1).
+					Return(account, nil)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				requireBodyMatchAccount(t, recorder.Body, account)
+			},
+		},
+		{
+			name:      "NotFound",
+			accountID: account.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetAccount(gomock.Any(), gomock.Eq(account.ID)).
+					Times(1).
+					// 找不到数据，用 ErrNoRows
+					Return(db.Account{}, sql.ErrNoRows)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			name:      "InternalError",
+			accountID: account.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetAccount(gomock.Any(), gomock.Eq(account.ID)).
+					Times(1).
+					// ErrConnDone 数据库连接已经用完或失效
+					Return(db.Account{}, sql.ErrConnDone)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+			},
+		},
+		{
+			name:      "InvalidID",
+			// 前端传了一个非法的ID，ID的最小值规定为1
+			accountID: 0,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					// 第二个参数可以是任何 ID，即表明无论参数是什么，都不该调用 GetAccount()
+					GetAccount(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+	}
+
+	// 遍历测试用例表
+	for i := range testCases {
+		// 用 tc 变量去存储当前测试用例的数据
+		tc := testCases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			store := mockdb.NewMockStore(ctrl)
+			// build stubs
+			// 调用 buildStubs 函数
+			tc.buildStubs(store)
+
+			// start test server and send request
+			server := NewServer(store)
+			recorder := httptest.NewRecorder()
+
+			// 这里原来是 account.ID
+			// 当测试 InvalidID 用例的时候，这里如果不修改无法通过测试
+			// 因为 account 是随机生成的，account.ID 总是一个有效的值
+			// 所以这里 account.ID --> tc.accountID
+			url := fmt.Sprintf("/accounts/%d", tc.accountID)
+			request, err := http.NewRequest(http.MethodGet, url, nil)
+			require.NoError(t, err)
+
+			server.router.ServeHTTP(recorder, request)
+			// check response
+			// 调用 checkResponse 函数
+			tc.checkResponse(t, recorder)
+		})
+	}
+
+}
+
+func randomAccount() db.Account {
+	return db.Account{
+		ID:       util.RandomInt(1, 1000),
+		Owner:    util.RandomOwner(),
+		Balance:  util.RandomMoney(),
+		Currency: util.RandomCurrency(),
+	}
+}
+
+func requireBodyMatchAccount(t *testing.T, body *bytes.Buffer, account db.Account) {
+	// data, err := ioutil.ReadAll(body)
+	data, err := io.ReadAll(body)
+	require.NoError(t, err)
+
+	var gotAccount db.Account
+	// 将从响应正文数据获得的账户对象反解到 gotAccount 中
+	err = json.Unmarshal(data, &gotAccount)
+	require.NoError(t, err)
+	require.Equal(t, account, gotAccount)
+}
