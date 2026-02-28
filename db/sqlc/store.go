@@ -7,6 +7,8 @@ import (
 )
 
 // Store provides all funcitons to execute db queries and transactions
+// 定义了一个匿名字段 *Queries
+// 所以 Store 可以“继承可见” Queries 的方法
 type Store struct {
 	*Queries
 	db *sql.DB
