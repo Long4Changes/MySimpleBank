@@ -44,8 +44,11 @@ func RandomMoney() int64 {
 }
 
 // RandomCurrency generates a random corrency code
+// 由于 currency.go 中定义了货币类型的常量
+// 这里可以直接使用这些常量了
+// "EUR" --> EUR etc.
 func RandomCurrency() string {
-	currencies := []string{"EUR", "USD", "CAD"}
+	currencies := []string{EUR, USD, CAD}
 	n := len(currencies)
 	return currencies[rand.Intn(n)]
 }

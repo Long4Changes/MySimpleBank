@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	db "github.com/Long4Changes/MySimpleBank/db/sqlc"
+	"github.com/gin-gonic/gin"
 )
 
 // 看到就复习一下
@@ -14,7 +14,9 @@ type createAccountRequest struct {
 	// binding 用于表示这个字段是必须的
 	Owner string `json:"owner" binding:"required"`
 	// 这里的 oneof 用于表示 Currency 只能是USD和EUR其中之一
-	Currency string `json:"currency" binding:"required,oneof=USD EUR"`
+	// oneof = USD EUR CAD
+	// 引入 validator 之后就不再需要 oneof 了
+	Currency string `json:"currency" binding:"required,currency"`
 }
 
 // 从前端传过来的数据有三种形式
