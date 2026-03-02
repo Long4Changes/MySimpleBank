@@ -4,7 +4,7 @@ import (
 	"github.com/Long4Changes/MySimpleBank/db/util"
 	"github.com/go-playground/validator/v10"
 )
-
+// Implement transfer money API with a custom params validator
 // 问题引入：
 // Currency string `json:"currency" binding:"required,oneof=USD EUR CAD"`
 // 如果我们以后要引入更多货币种类怎么办，难道全部写在 oneof=后面吗？

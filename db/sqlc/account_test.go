@@ -11,8 +11,13 @@ import (
 )
 
 func createRandomAccount(t *testing.T) Account {
+	// 这里本来可以 Owner:    util.RandomOwner(),
+	// 但是加入 users 表后，由于我们添加了一组 Owner 关联 User 的外键
+	// 所以这里需要新创建一个 user，并用 user.Username 当作 owner
+	user := createRandomUser(t)
+
 	arg := CreateAccountParams{
-		Owner:    util.RandomOwner(),
+		Owner:    user.Username,
 		Balance:  util.RandomMoney(),
 		Currency: util.RandomCurrency(),
 	}

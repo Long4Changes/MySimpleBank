@@ -17,6 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// 当引入 users 表之后，这里的测试也会不通过，会提示 *mockdb.MockStore does not implement db.Store 
+// db.Store 中加入了 CreateUser 和 GetUser 这两个方法，所以我们要用 mockgen 重新生产 gomock 的代码
 func TestGetAccountAPI(t *testing.T) {
 	/*
 		// 以下只进行了 Happy Path 完美路径 的测试

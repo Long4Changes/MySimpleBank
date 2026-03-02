@@ -2,6 +2,7 @@ package util
 
 import "github.com/spf13/viper"
 
+// Load config from file & environment variable in Golang with Viper
 // Config stores all configuration of the application.
 // The values are read by viper from a config file or environment variables.
 type Config struct {

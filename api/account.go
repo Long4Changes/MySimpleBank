@@ -6,6 +6,7 @@ import (
 
 	db "github.com/Long4Changes/MySimpleBank/db/sqlc"
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 )
 
 // 看到就复习一下
@@ -40,6 +41,23 @@ func (server *Server) createAccount(ctx *gin.Context) {
 
 	// 这里实际调用的是 server.store.Queries.CreateAccount(...)
 	account, err := server.store.CreateAccount(ctx, arg)
+	// Handlel DB errors in Go
+	// 把 err 从 error 类型转换为 PostgreSQL 驱动的具体错误类型 *pq.Error
+	// ok == true 说明这次错误的确来自 PostgreSQL，于是打印 pqErr.Code.Name() 用于调试日志
+	// log.Println(pqErr.Code.Name())
+	// 比如这里打印的 foreign_key_violation
+	// ok == false 说明不是 *pq.Error 就不打印这行日志
+	if pqErr, ok := err.(*pq.Error); ok {
+		// foreign_key_violation: 给一个没有在 user 表有 username 的 owner 创建 account
+		// unique_violation: 重复给同一个 owner 创建相同 currency 的 account
+		// 如果不按照下面的形式，上面的两种错误都会返回 InternalServerError 500
+		// 通过 *pq.Error 判断是否是 PostgresSQL 的错误，如果是则对数据库的错误进行特殊处理 
+		switch pqErr.Code.Name() {
+		case "foreign_key_violation", "unique_violation":
+			ctx.JSON(http.StatusForbidden, errorResponse(err))
+			return
+		}
+	}
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
