@@ -28,6 +28,8 @@ func (server *Server) createAccount(ctx *gin.Context) {
 	var req createAccountRequest
 	// 系统尝试把前端传过来的JSON数据，强行塞进你定义的 createAccountRequest结构体当中
 	// 其实是做一个数据的转换，根据前段传过来参数的类型，后端定义能接住这种类型的结构
+	// 不要忘记 ShouldBindJSON() 里面传的是 地址 &，
+	// ShouldBindJSON() 要把解析出的 JSON 字段写进去，所以要传指针
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, errorResponse(err))
 		return
@@ -47,18 +49,19 @@ func (server *Server) createAccount(ctx *gin.Context) {
 	// log.Println(pqErr.Code.Name())
 	// 比如这里打印的 foreign_key_violation
 	// ok == false 说明不是 *pq.Error 就不打印这行日志
-	if pqErr, ok := err.(*pq.Error); ok {
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok {
 		// foreign_key_violation: 给一个没有在 user 表有 username 的 owner 创建 account
 		// unique_violation: 重复给同一个 owner 创建相同 currency 的 account
 		// 如果不按照下面的形式，上面的两种错误都会返回 InternalServerError 500
+		// 500 指服务端错误，但实际是客户端的问题，所以处理一下返回 403 更合适
 		// 通过 *pq.Error 判断是否是 PostgresSQL 的错误，如果是则对数据库的错误进行特殊处理 
-		switch pqErr.Code.Name() {
-		case "foreign_key_violation", "unique_violation":
-			ctx.JSON(http.StatusForbidden, errorResponse(err))
-			return
+			switch pqErr.Code.Name() {
+			case "foreign_key_violation", "unique_violation":
+				ctx.JSON(http.StatusForbidden, errorResponse(err))
+				return
+			}
 		}
-	}
-	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}

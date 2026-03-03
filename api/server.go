@@ -29,6 +29,8 @@ func NewServer(store db.Store) *Server {
 	}
 
 	// add routes to router
+	// 创建一个用户
+	router.POST("/users", server.createUser)
 	// 创建一个账户
 	router.POST("/accounts", server.createAccount)
 	// 根据 id 查询一个账户

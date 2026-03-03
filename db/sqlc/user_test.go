@@ -11,10 +11,13 @@ import (
 
 // 这个测试文件可以在 account_test.go 的基础上改一改
 func createRandomUser(t *testing.T) User {
+	hashedPassword, err := util.HashPassword(util.RandomString(6))
+	require.NoError(t, err)
+
 	arg := CreateUserParams{
 		Username:    util.RandomOwner(),
-		// 正确做法是随机生成一个密码，并用 Bcrypt 进行 Hash
-		HashedPassword:  "secret",
+		// "secret" 正确做法是随机生成一个密码，并用 Bcrypt 进行 Hash
+		HashedPassword:  hashedPassword,
 		FullName: util.RandomOwner(),
 		Email: util.RandomEmail(),
 	}
