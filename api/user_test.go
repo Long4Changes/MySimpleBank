@@ -92,6 +92,7 @@ func TestCreateUserAPI(t *testing.T) {
 	}
 }
 
+// custom gomock matcher
 // 定义 eqCreateUserParamsMatcher 这个类
 // 在下面我们让这个类实现了 gomock.Matcher 接口要求的方法
 // 只要一个类实现了接口全部方法，Go 就会自动把它当这个接口用
