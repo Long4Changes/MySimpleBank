@@ -72,3 +72,13 @@ func (maker *JWTMaker) VerifyToken(token string) (*Payload, error) {
 	} 
 	return payload, nil
 }
+
+
+// 创建流程（CreateToken）
+	// payload := NewPayload(...) 先准备数据
+	// jwtToken := jwt.NewWithClaims(..., payload) 组装中间对象
+	// token, _ := jwtToken.SignedString(secret) 签名后得到最终字符串
+
+// 校验流程（VerifyToken）
+	// jwtToken, err := jwt.ParseWithClaims(tokenString, &Payload{}, keyFunc) 解析+验签
+	// payload := jwtToken.Claims.(*Payload) 把 claims 取回业务结构体
