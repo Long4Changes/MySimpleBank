@@ -145,7 +145,10 @@ func TestGetAccountAPI(t *testing.T) {
 			tc.buildStubs(store)
 
 			// start test server and send request
-			server := NewServer(store)
+			// server := NewServer(store) 
+			// 这里用 newTestServer
+			server := newTestServer(t, store)
+
 			recorder := httptest.NewRecorder()
 
 			// 这里原来是 account.ID
@@ -294,7 +297,9 @@ func TestCreateAccountAPI(t *testing.T) {
 
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			// server := NewServer(store) 
+			// 这里用 newTestServer
+			server := newTestServer(t, store)
 
 			recorder := httptest.NewRecorder()
 
@@ -402,7 +407,10 @@ func TestListAccountAPI(t *testing.T) {
 
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			// server := NewServer(store) 
+			// 这里用 newTestServer
+			server := newTestServer(t, store)
+
 			recorder := httptest.NewRecorder()
 
 			url := fmt.Sprintf("/accounts?page_id=%d&page_size=%d", tc.pageID, tc.pageSize)
@@ -500,7 +508,10 @@ func TestUpdateAccountAPI(t *testing.T) {
 			// build stubs
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			// server := NewServer(store) 
+			// 这里用 newTestServer
+			server := newTestServer(t, store)
+
 			recorder := httptest.NewRecorder()
 
 			url := "/accounts/update"
@@ -592,7 +603,10 @@ func TestDeleteAccountAPI(t *testing.T) {
 
 			tc.buildStubs(store)
 
-			server := NewServer(store)
+			// server := NewServer(store) 
+			// 这里用 newTestServer
+			server := newTestServer(t, store)
+
 			recorder := httptest.NewRecorder()
 
 			url := fmt.Sprintf("/accounts/delete/%d", tc.accountID)

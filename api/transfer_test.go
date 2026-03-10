@@ -255,7 +255,10 @@ func TestCreateTransferAPI(t *testing.T) {
 
 			tc.buildStubs(store)
 
-			server := NewServer(store) 
+			// server := NewServer(store) 
+			// 这里用 newTestServer
+			server := newTestServer(t, store)
+
 			recorder := httptest.NewRecorder()
 
 			url := "/transfers"
