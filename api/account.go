@@ -2,9 +2,11 @@ package api
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 
 	db "github.com/Long4Changes/MySimpleBank/db/sqlc"
+	"github.com/Long4Changes/MySimpleBank/token"
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
 )
@@ -13,7 +15,9 @@ import (
 // request就是传入， response就是传出
 type createAccountRequest struct {
 	// binding 用于表示这个字段是必须的
-	Owner string `json:"owner" binding:"required"`
+	// 这一行不需要了，因为 Owner 应该存储在 user 登录后的 authorization payload 当中
+	// Owner string `json:"owner" binding:"required"`
+
 	// 这里的 oneof 用于表示 Currency 只能是USD和EUR其中之一
 	// oneof = USD EUR CAD
 	// 引入 validator 之后就不再需要 oneof 了
@@ -35,8 +39,11 @@ func (server *Server) createAccount(ctx *gin.Context) {
 		return
 	}
 
+	// 使用 MustGet 获取 authPayload，但是要注意转换类型
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 	arg := db.CreateAccountParams{
-		Owner:    req.Owner,
+		// Owner:    req.Owner,
+		Owner: authPayload.Username,
 		Currency: req.Currency,
 		Balance:  0,
 	}
@@ -51,11 +58,11 @@ func (server *Server) createAccount(ctx *gin.Context) {
 	// ok == false 说明不是 *pq.Error 就不打印这行日志
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok {
-		// foreign_key_violation: 给一个没有在 user 表有 username 的 owner 创建 account
-		// unique_violation: 重复给同一个 owner 创建相同 currency 的 account
-		// 如果不按照下面的形式，上面的两种错误都会返回 InternalServerError 500
-		// 500 指服务端错误，但实际是客户端的问题，所以处理一下返回 403 更合适
-		// 通过 *pq.Error 判断是否是 PostgresSQL 的错误，如果是则对数据库的错误进行特殊处理 
+			// foreign_key_violation: 给一个没有在 user 表有 username 的 owner 创建 account
+			// unique_violation: 重复给同一个 owner 创建相同 currency 的 account
+			// 如果不按照下面的形式，上面的两种错误都会返回 InternalServerError 500
+			// 500 指服务端错误，但实际是客户端的问题，所以处理一下返回 403 更合适
+			// 通过 *pq.Error 判断是否是 PostgresSQL 的错误，如果是则对数据库的错误进行特殊处理
 			switch pqErr.Code.Name() {
 			case "foreign_key_violation", "unique_violation":
 				ctx.JSON(http.StatusForbidden, errorResponse(err))
@@ -94,6 +101,13 @@ func (server *Server) getAccount(ctx *gin.Context) {
 		return
 	}
 
+	// 检查现在登录的 user 是否有权限获取这个 account
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	if account.Owner != authPayload.Username {
+		err := errors.New("account doesn't belong to the authenticated user")
+		ctx.JSON(http.StatusUnauthorized, errorResponse(err))
+		return 
+	}
 	ctx.JSON(http.StatusOK, account)
 }
 
@@ -111,7 +125,10 @@ func (server *Server) listAccount(ctx *gin.Context) {
 		return
 	}
 
+	// 只筛选出登录的 user 的 account
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 	arg := db.ListAccountsParams{
+		Owner: authPayload.Username,
 		// Limit: 每一页最多返回多少数据
 		Limit: req.PageSize,
 		// Offset: 跳过前面多少条数据再开始取

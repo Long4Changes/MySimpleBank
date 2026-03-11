@@ -9,15 +9,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	mockdb "github.com/Long4Changes/MySimpleBank/db/mock"
 	db "github.com/Long4Changes/MySimpleBank/db/sqlc"
 	"github.com/Long4Changes/MySimpleBank/db/util"
+	"github.com/Long4Changes/MySimpleBank/token"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
 
-// 当引入 users 表之后，这里的测试也会不通过，会提示 *mockdb.MockStore does not implement db.Store 
+// 当引入 users 表之后，这里的测试也会不通过，会提示 *mockdb.MockStore does not implement db.Store
 // db.Store 中加入了 CreateUser 和 GetUser 这两个方法，所以我们要用 mockgen 重新生产 gomock 的代码
 func TestGetAccountAPI(t *testing.T) {
 	/*
@@ -65,17 +67,22 @@ func TestGetAccountAPI(t *testing.T) {
 		requireBodyMatchAccount(t, recorder.Body, account)
 	*/
 
-	account := randomAccount()
+	user, _ := randomUser(t)
+	account := randomAccount(user.Username)
 
 	testCases := []struct {
 		name          string
 		accountID     int64
+		setupAuth     func(t *testing.T, request *http.Request, tokenMaker token.Maker)
 		buildStubs    func(store *mockdb.MockStore)
 		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
 			name:      "OK",
 			accountID: account.ID,
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.Username, time.Minute)
+			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					GetAccount(gomock.Any(), gomock.Eq(account.ID)).
@@ -88,8 +95,43 @@ func TestGetAccountAPI(t *testing.T) {
 			},
 		},
 		{
+			name:      "UnauthorizedUser",
+			accountID: account.ID,
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, "unauthorized_user", time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetAccount(gomock.Any(), gomock.Eq(account.ID)).
+					Times(1).
+					Return(account, nil)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
+			name:      "NoAuthorization",
+			accountID: account.ID,
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				// 没有 authorization
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					// 会被 authMiddleware 拦截
+					GetAccount(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
 			name:      "NotFound",
 			accountID: account.ID,
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.Username, time.Minute)
+			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					GetAccount(gomock.Any(), gomock.Eq(account.ID)).
@@ -104,6 +146,9 @@ func TestGetAccountAPI(t *testing.T) {
 		{
 			name:      "InternalError",
 			accountID: account.ID,
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.Username, time.Minute)
+			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					GetAccount(gomock.Any(), gomock.Eq(account.ID)).
@@ -119,6 +164,9 @@ func TestGetAccountAPI(t *testing.T) {
 			name: "InvalidID",
 			// 前端传了一个非法的ID，ID的最小值规定为1
 			accountID: 0,
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.Username, time.Minute)
+			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					// 第二个参数可以是任何 ID，即表明无论参数是什么，都不该调用 GetAccount()
@@ -145,7 +193,7 @@ func TestGetAccountAPI(t *testing.T) {
 			tc.buildStubs(store)
 
 			// start test server and send request
-			// server := NewServer(store) 
+			// server := NewServer(store)
 			// 这里用 newTestServer
 			server := newTestServer(t, store)
 
@@ -159,6 +207,7 @@ func TestGetAccountAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			tc.setupAuth(t, request, server.tokenMaker)
 			server.router.ServeHTTP(recorder, request)
 			// check response
 			// 调用 checkResponse 函数
@@ -221,18 +270,13 @@ func TestCreateAccountAPI(t *testing.T) {
 		require.Equal(t, http.StatusOK, recorder.Code)
 		requireBodyMatchAccount(t, recorder.Body, account)
 	*/
-	owner := util.RandomOwner()
-	currency := util.RandomCurrency()
+	
+	user, _ := randomUser(t)
+	account := randomAccount(user.Username)
 
 	arg := db.CreateAccountParams{
-		Owner:    owner,
-		Currency: currency,
-		Balance:  0,
-	}
-
-	account := db.Account{
-		Owner:    owner,
-		Currency: currency,
+		Owner:    account.Owner,
+		Currency: account.Currency,
 		Balance:  0,
 	}
 
@@ -245,8 +289,8 @@ func TestCreateAccountAPI(t *testing.T) {
 	}{
 		{
 			name:     "OK",
-			Owner:    owner,
-			Currency: currency,
+			Owner:    account.Owner,
+			Currency: account.Currency, 
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CreateAccount(gomock.Any(), gomock.Eq(arg)).
@@ -260,8 +304,8 @@ func TestCreateAccountAPI(t *testing.T) {
 		},
 		{
 			name:     "InternalError",
-			Owner:    owner,
-			Currency: currency,
+			Owner:    account.Owner,
+			Currency: account.Currency,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CreateAccount(gomock.Any(), gomock.Eq(arg)).
@@ -275,7 +319,7 @@ func TestCreateAccountAPI(t *testing.T) {
 		{
 			name:     "InvalidInput",
 			Owner:    "",
-			Currency: currency,
+			Currency: account.Currency,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CreateAccount(gomock.Any(), gomock.Any()).
@@ -297,7 +341,7 @@ func TestCreateAccountAPI(t *testing.T) {
 
 			tc.buildStubs(store)
 
-			// server := NewServer(store) 
+			// server := NewServer(store)
 			// 这里用 newTestServer
 			server := newTestServer(t, store)
 
@@ -306,7 +350,7 @@ func TestCreateAccountAPI(t *testing.T) {
 			url := "/accounts"
 
 			body, err := json.Marshal(createAccountRequest{
-				Owner:    tc.Owner,
+				// Owner:    tc.Owner,
 				Currency: tc.Currency,
 			})
 
@@ -321,18 +365,16 @@ func TestCreateAccountAPI(t *testing.T) {
 }
 
 func TestListAccountAPI(t *testing.T) {
-	allAccounts := make([]db.Account, util.RandomInt(1, 100))
+	user, _ := randomUser(t)
 
-	for i := range allAccounts {
-		account := randomAccount()
-		allAccounts[i].ID = account.ID
-		allAccounts[i].Owner = account.Owner
-		allAccounts[i].Balance = account.Balance
-		allAccounts[i].Currency = account.Currency
-		allAccounts[i].CreatedAt = account.CreatedAt
+	n := 5
+	accounts := make([]db.Account, n)
+	for i := 0; i < n; i++ {
+		accounts[i] = randomAccount(user.Username)
 	}
+
 	page_size := util.RandomInt32(5, 10)
-	totalPages := (int32(len(allAccounts) + int(page_size) - 1)) / page_size
+	totalPages := (int32(len(accounts) + int(page_size) - 1)) / page_size
 	page_id := util.RandomInt32(1, totalPages)
 
 	arg := db.ListAccountsParams{
@@ -342,10 +384,10 @@ func TestListAccountAPI(t *testing.T) {
 
 	start := int((page_id - 1) * page_size)
 	end := start + int(page_size)
-	if end > len(allAccounts) {
-		end = len(allAccounts)
+	if end > len(accounts) {
+		end = len(accounts)
 	}
-	resultAccounts := allAccounts[start:end]
+	resultAccounts := accounts[start:end]
 
 	testCases := []struct {
 		name          string
@@ -407,7 +449,7 @@ func TestListAccountAPI(t *testing.T) {
 
 			tc.buildStubs(store)
 
-			// server := NewServer(store) 
+			// server := NewServer(store)
 			// 这里用 newTestServer
 			server := newTestServer(t, store)
 
@@ -425,24 +467,26 @@ func TestListAccountAPI(t *testing.T) {
 }
 
 func TestUpdateAccountAPI(t *testing.T) {
-	account := randomAccount()
-	resultBalance := util.RandomMoney() 
+	user, _ := randomUser(t)
+	account := randomAccount(user.Username)
+
+	resultBalance := util.RandomMoney()
 	account.Balance = resultBalance
 
 	arg := db.UpdateAccountParams{
-		ID: account.ID,
+		ID:      account.ID,
 		Balance: resultBalance,
 	}
-	testCases := []struct{
-		name string 
-		accountID int64
+	testCases := []struct {
+		name           string
+		accountID      int64
 		accountBalance int64
-		buildStubs func(store *mockdb.MockStore)
-		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
+		buildStubs     func(store *mockdb.MockStore)
+		checkResponse  func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
-			name: "OK", 
-			accountID: account.ID,
+			name:           "OK",
+			accountID:      account.ID,
 			accountBalance: resultBalance,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
@@ -454,10 +498,10 @@ func TestUpdateAccountAPI(t *testing.T) {
 				require.Equal(t, http.StatusOK, recorder.Code)
 				requireBodyMatchAccount(t, recorder.Body, account)
 			},
-		}, 
+		},
 		{
-			name: "NotFound", 
-			accountID: account.ID,
+			name:           "NotFound",
+			accountID:      account.ID,
 			accountBalance: resultBalance,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
@@ -468,10 +512,10 @@ func TestUpdateAccountAPI(t *testing.T) {
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
-		}, 
+		},
 		{
-			name: "InternalError", 
-			accountID: account.ID,
+			name:           "InternalError",
+			accountID:      account.ID,
 			accountBalance: resultBalance,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
@@ -484,8 +528,8 @@ func TestUpdateAccountAPI(t *testing.T) {
 			},
 		},
 		{
-			name: "InvalidInput", 
-			accountID: 0,
+			name:           "InvalidInput",
+			accountID:      0,
 			accountBalance: resultBalance,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
@@ -508,7 +552,7 @@ func TestUpdateAccountAPI(t *testing.T) {
 			// build stubs
 			tc.buildStubs(store)
 
-			// server := NewServer(store) 
+			// server := NewServer(store)
 			// 这里用 newTestServer
 			server := newTestServer(t, store)
 
@@ -517,7 +561,7 @@ func TestUpdateAccountAPI(t *testing.T) {
 			url := "/accounts/update"
 
 			body, err := json.Marshal(UpdateAccountRequest{
-				ID: tc.accountID,
+				ID:      tc.accountID,
 				Balance: tc.accountBalance,
 			})
 			require.NoError(t, err)
@@ -535,15 +579,17 @@ func TestUpdateAccountAPI(t *testing.T) {
 }
 
 func TestDeleteAccountAPI(t *testing.T) {
-	account := randomAccount()
-	testCases := []struct{
-		name string 
-		accountID int64
-		buildStubs func(store *mockdb.MockStore)
+	user, _ := randomUser(t)
+	account := randomAccount(user.Username)
+
+	testCases := []struct {
+		name          string
+		accountID     int64
+		buildStubs    func(store *mockdb.MockStore)
 		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
-			name: "OK", 
+			name:      "OK",
 			accountID: account.ID,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
@@ -554,9 +600,9 @@ func TestDeleteAccountAPI(t *testing.T) {
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
 			},
-		}, 
+		},
 		{
-			name: "NotFound", 
+			name:      "NotFound",
 			accountID: account.ID,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
@@ -567,9 +613,9 @@ func TestDeleteAccountAPI(t *testing.T) {
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
-		}, 
+		},
 		{
-			name: "InternalError", 
+			name:      "InternalError",
 			accountID: account.ID,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
@@ -582,7 +628,7 @@ func TestDeleteAccountAPI(t *testing.T) {
 			},
 		},
 		{
-			name: "InvalidInput", 
+			name:      "InvalidInput",
 			accountID: 0,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
@@ -603,7 +649,7 @@ func TestDeleteAccountAPI(t *testing.T) {
 
 			tc.buildStubs(store)
 
-			// server := NewServer(store) 
+			// server := NewServer(store)
 			// 这里用 newTestServer
 			server := newTestServer(t, store)
 
@@ -619,10 +665,13 @@ func TestDeleteAccountAPI(t *testing.T) {
 		})
 	}
 }
-func randomAccount() db.Account {
+
+// 添加鉴权之后，这里我们直接将 owner 作为输入，而非每次都随机 owner
+func randomAccount(owner string) db.Account {
 	return db.Account{
-		ID:       util.RandomInt(1, 1000),
-		Owner:    util.RandomOwner(),
+		ID: util.RandomInt(1, 1000),
+		// Owner:    util.RandomOwner(),
+		Owner:    owner,
 		Balance:  util.RandomMoney(),
 		Currency: util.RandomCurrency(),
 	}

@@ -65,22 +65,29 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 func (server *Server) setupRouter() {
 	router := gin.Default()
 	// add routes to router
+
+	// Create Users and User Login dont need the protection of AuthMiddleware, but the rest routers do need
 	// 创建一个用户
 	router.POST("/users", server.createUser)
 	// 用户登录
 	router.POST("/users/login", server.loginUser)
+
+	// make a router group 
+	// all the routes below will be protected by the authMiddleware 
+	authRoutes := router.Group("/").Use(authMiddleware(server.tokenMaker))
+
 	// 创建一个账户
-	router.POST("/accounts", server.createAccount)
+	authRoutes.POST("/accounts", server.createAccount)
 	// 根据 id 查询一个账户
-	router.GET("/accounts/:id", server.getAccount)
+	authRoutes.GET("/accounts/:id", server.getAccount)
 	// 分页展示账户
-	router.GET("/accounts", server.listAccount)
+	authRoutes.GET("/accounts", server.listAccount)
 	// 更新账户
-	router.POST("/accounts/update", server.updateAccount)
+	authRoutes.POST("/accounts/update", server.updateAccount)
 	// 删除账户
-	router.POST("/accounts/delete/:id", server.deleteAccount)
+	authRoutes.POST("/accounts/delete/:id", server.deleteAccount)
 	// 转账
-	router.POST("/transfers", server.createTransfer)
+	authRoutes.POST("/transfers", server.createTransfer)
 
 	server.router = router
 }

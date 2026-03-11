@@ -99,6 +99,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		return
 	}
 
+	// 获取 user 信息
 	user, err := server.store.GetUser(ctx, req.Username)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -109,12 +110,14 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		return
 	}
 
+	// CheckPassword checks if the provided password is correct or not 
 	err = util.CheckPassword(req.Password, user.HashedPassword)
 	if err != nil {
 		ctx.JSON(http.StatusUnauthorized, errorResponse(err))
 		return
 	}
 
+	// create access token
 	accessToken, err := server.tokenMaker.CreateToken(
 		user.Username,
 		server.config.AccessTokenDuration,

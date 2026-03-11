@@ -86,20 +86,30 @@ func TestDeleteAccount(t *testing.T) {
 }
 
 func TestListAccounts(t *testing.T) {
+	// 本来是随机生成 10 个 account，每个 account 都关联一个随机的 user
+	// 现在只取最后一个 account
+	var lastAccount Account
 	for i := 0; i < 10; i++ {
-		createRandomAccount(t)
+		lastAccount = createRandomAccount(t)
 	}
 
 	arg := ListAccountsParams{
+		// 这里加入 owner 的筛选条件
+		Owner: lastAccount.Owner,
 		Limit:  5, // 每页最多显示5条记录
-		Offset: 5, // 跳过前5条记录，从第6条记录开始
+		// Offset: 5, // 跳过前5条记录，从第6条记录开始
+		// 由于与最后一个 account 的 owner 相同的 account 应该很少，所以跳过 0 条记录，保证至少展示一条记录
+		Offset: 0,
 	}
 
 	accounts, err := testQueries.ListAccounts(context.Background(), arg)
 	require.NoError(t, err)
-	require.Len(t, accounts, 5)
+	// require.Len(t, accounts, 5)
+	require.NotEmpty(t, accounts)
 
 	for _, account := range accounts {
 		require.NotEmpty(t, account)
+		// 检查筛选出来的 accounts 里的 owner 是不是和我们指定的一样
+		require.Equal(t, lastAccount.Owner, account.Owner)
 	}
 }

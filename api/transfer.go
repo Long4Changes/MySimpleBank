@@ -2,10 +2,12 @@ package api
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 
 	db "github.com/Long4Changes/MySimpleBank/db/sqlc"
+	"github.com/Long4Changes/MySimpleBank/token"
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,10 +27,21 @@ func (server *Server) createTransfer(ctx *gin.Context) {
 	}
 	// 验证这两个 account 是否都存在
 	// 验证这两个账户的 currency 是否都和传入的 currency 一致
-	if !server.validAccount(ctx, req.FromAccountID, req.Currency) {
+	// 我们只需要 fromAccount 的信息，所以 toAccount 的位置直接用占位符就好
+	fromAccount, valid := server.validAccount(ctx, req.FromAccountID, req.Currency)
+	if !valid {
 		return
 	}
-	if !server.validAccount(ctx, req.ToAccountID, req.Currency) {
+
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	if fromAccount.Owner != authPayload.Username {
+		err := errors.New("from account doesn't belong to the authenticated user")
+		ctx.JSON(http.StatusUnauthorized, errorResponse(err))
+		return
+	}
+
+	_, valid = server.validAccount(ctx, req.ToAccountID, req.Currency)
+	if !valid {
 		return
 	}
 
@@ -50,22 +63,24 @@ func (server *Server) createTransfer(ctx *gin.Context) {
 // 这个方法用来验证：
 // 1. 特定 ID 的 account 是否存在
 // 2. 这个 account 的 currency 是否和输入的 currency 一致
-func (server *Server) validAccount(ctx *gin.Context, accountID int64, currency string) bool {
+// 由于我们需要比较所有的 FromAccount 的 Owner 是否是目前登录的 user
+// 所以我们需要把 account 的信息也一并返回
+func (server *Server) validAccount(ctx *gin.Context, accountID int64, currency string) (db.Account, bool){
 	account, err := server.store.GetAccount(ctx, accountID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			ctx.JSON(http.StatusNotFound, errorResponse(err))
-			return false
+			return account, false
 		}
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
-		return false
+		return account, false
 	}
 
 	if account.Currency != currency {
 		err := fmt.Errorf("account [%d] currency mismatch: %s vs %s", accountID, account.Currency, currency)
 		ctx.JSON(http.StatusBadRequest, errorResponse(err))
-		return false
+		return account, false
 	}
 
-	return true
+	return account, true
 }

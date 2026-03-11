@@ -17,8 +17,11 @@ import (
 )
 
 func TestCreateTransferAPI(t *testing.T) {
-	fromAccount := randomAccount()
-	toAccount := randomAccount()
+	user1, _ := randomUser(t)
+	user2, _ := randomUser(t)
+
+	fromAccount := randomAccount(user1.Username)
+	toAccount := randomAccount(user2.Username)
 
 	if fromAccount.Currency != toAccount.Currency {
 		toAccount.Currency = fromAccount.Currency

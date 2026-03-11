@@ -18,10 +18,7 @@ import (
 )
 
 func TestCreateUserAPI(t *testing.T) {
-	password := util.RandomString(6)
-	hashedPassword, err := util.HashPassword(password)
-	require.NoError(t, err)
-	user := randomUser(hashedPassword)
+	user, password := randomUser(t)
 
 	arg := db.CreateUserParams{
 		Username:       user.Username,
@@ -131,13 +128,20 @@ func EqCreateUserParams(arg db.CreateUserParams, password string) gomock.Matcher
 	return eqCreateUserParamsMatcher{arg, password}
 }
 
-func randomUser(hashedPassword string) db.User {
-	return db.User{
-		Username:       util.RandomString(6),
+
+// 这里对 randomUser 进行了修改
+func randomUser(t *testing.T) (user db.User, password string) {
+	password = util.RandomString(6)
+	hashedPassword, err := util.HashPassword(password)
+	require.NoError(t, err)
+
+	user = db.User{
+		Username:       util.RandomOwner(),
 		HashedPassword: hashedPassword,
-		FullName:       util.RandomString(6),
+		FullName:       util.RandomOwner(),
 		Email:          util.RandomEmail(),
 	}
+	return
 }
 
 func requireBodyMatchUser(t *testing.T, body *bytes.Buffer, user db.User) {
@@ -146,6 +150,7 @@ func requireBodyMatchUser(t *testing.T, body *bytes.Buffer, user db.User) {
 
 	var gotUser userResponse
 	err = json.Unmarshal(data, &gotUser)
+
 	require.NoError(t, err)
 	require.Equal(t, user.Username, gotUser.Username)
 	require.Equal(t, user.FullName, gotUser.FullName)
