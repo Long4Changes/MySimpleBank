@@ -1,5 +1,7 @@
 module github.com/Long4Changes/MySimpleBank
 
+// go get go@版本号，一键升级或降级当前项目所需要的 go 版本
+// 最好把 github workflow 中的 ci.yaml 中的版本号也改一下
 go 1.25.0
 
 require (
