@@ -2,7 +2,7 @@
 
 # Build Stage
 # 指定基础镜像
-FROM golang:1.26.3-alpine3.23 AS builder
+FROM golang:alpine AS builder
 
 # 设置工作目录
 WORKDIR /app
@@ -21,6 +21,9 @@ WORKDIR /app
 
 # 从 Build Stage 复制二进制文件到 Run Stage
 COPY --from=builder /app/main .
+
+# 复制环境配置文件
+COPY app.env .
 
 # 声明程序运行的端口
 EXPOSE 8080
